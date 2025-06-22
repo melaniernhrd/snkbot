@@ -1,2 +1,2 @@
-discord.ply
+discord.py
 flask
