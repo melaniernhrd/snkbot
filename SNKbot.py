@@ -1,6 +1,7 @@
 import discord
 from discord.ext import commands
 import json
+import string
 
 intents = discord.Intents.default()
 intents.members = True
@@ -29,7 +30,6 @@ async def on_ready():
     global rollen_nachricht_id
     print(f"Bot ist eingeloggt als {bot.user}")
 
-    # Versuche gespeicherte Nachricht-ID zu laden
     try:
         with open("rollen_message_id.txt", "r") as f:
             rollen_nachricht_id = int(f.read().strip())
@@ -42,34 +42,28 @@ async def on_ready():
         print("Channel 'rollenverwaltung' nicht gefunden.")
         return
 
-    # Prüfe ob Nachricht existiert
     if rollen_nachricht_id:
         try:
             await rollen_channel.fetch_message(rollen_nachricht_id)
             print("Rollen-Nachricht existiert bereits.")
-            return  # Nachricht existiert, fertig
+            return
         except discord.NotFound:
             print("Gespeicherte Rollen-Nachricht nicht gefunden, erstelle neu.")
 
-    # Nachrichtentext zusammenbauen
     text = (
         "Hol dir hier deine Rolle für den Server!\n"
         "Du brauchst mindestens eine Rolle, um alle Text- und Sprachchannels sehen zu können. "
         "Alle Rollen geben dir die gleichen Lese- und Schreibrechte – du kannst also einfach die Rolle wählen, der du dich am stärksten zugehörig fühlst.\n\n"
         "Klicke auf das entsprechende Emoji, um deine Rolle auszuwählen:\n\n"
     )
-
     for emoji, role_name in role_emojis.items():
         text += f"{str(emoji)}: {role_name}\n"
 
-    # Nachricht senden
     message = await rollen_channel.send(text)
 
-    # Reaktionen hinzufügen
     for emoji in role_emojis:
         await message.add_reaction(emoji)
 
-    # ID speichern
     rollen_nachricht_id = message.id
     with open("rollen_message_id.txt", "w") as f:
         f.write(str(rollen_nachricht_id))
@@ -90,7 +84,7 @@ async def on_member_join(member):
             "In **Quarantäne** kannst du dich austoben, in der **Postpartnersuche** findest du Schreibpartner, "
             "und im **Support** ist fast immer jemand da, der dir bei Fragen weiterhilft. Viel Spaß! 🎉"
         )
-        
+
 @bot.event
 async def on_raw_reaction_add(payload):
     if payload.message_id != rollen_nachricht_id or payload.user_id == bot.user.id:
@@ -133,15 +127,20 @@ async def on_message(message):
         return
 
     content_lower = message.content.lower()
+    # Satzzeichen entfernen
+    clean_text = content_lower.translate(str.maketrans('', '', string.punctuation))
+    words = clean_text.split()
 
-    if "döner" in content_lower:
+    if "döner" in words:
         await message.add_reaction("🥙")
-    if "keks" in content_lower:
+    if "keks" in words or "cookie" in words:
         await message.add_reaction("🍪")
-    if "ziege" in content_lower or "goat" in content_lower:
+    if "ziege" in words or "goat" in words:
         await message.add_reaction("🐐")
-    if "racoon" in content_lower or "waschbär" in content_lower:
+    if "raccoon" in words or "waschbär" in words:
         await message.add_reaction("🦝")
+    if "lokum" in words:
+        await message.add_reaction("<:lokum:1387127655517651124>")  # Custom Emoji als Text
 
     await bot.process_commands(message)
 
