@@ -1,6 +1,6 @@
 import discord
 from discord.ext import commands
-import os
+import json
 
 intents = discord.Intents.default()
 intents.members = True
@@ -16,8 +16,7 @@ role_emojis = {
     discord.PartialEmoji(name="🍃", id=None): "Unabhängige"
 }
 
-# Feste ID der Rollen-Nachricht
-rollen_nachricht_id = 1386434628256268300
+rollen_nachricht_id = None  # wird geladen oder gesetzt
 
 def emojis_equal(e1, e2):
     if e1.id and e2.id:
@@ -27,7 +26,55 @@ def emojis_equal(e1, e2):
 
 @bot.event
 async def on_ready():
+    global rollen_nachricht_id
     print(f"Bot ist eingeloggt als {bot.user}")
+
+    # Versuche gespeicherte Nachricht-ID zu laden
+    try:
+        with open("rollen_message_id.txt", "r") as f:
+            rollen_nachricht_id = int(f.read().strip())
+            print(f"Geladene Rollen-Nachricht-ID: {rollen_nachricht_id}")
+    except FileNotFoundError:
+        print("Keine gespeicherte Rollen-Nachricht-ID gefunden.")
+
+    rollen_channel = discord.utils.get(bot.get_all_channels(), name="rollenverwaltung")
+    if not rollen_channel:
+        print("Channel 'rollenverwaltung' nicht gefunden.")
+        return
+
+    # Prüfe ob Nachricht existiert
+    if rollen_nachricht_id:
+        try:
+            await rollen_channel.fetch_message(rollen_nachricht_id)
+            print("Rollen-Nachricht existiert bereits.")
+            return  # Nachricht existiert, fertig
+        except discord.NotFound:
+            print("Gespeicherte Rollen-Nachricht nicht gefunden, erstelle neu.")
+
+    # Nachrichtentext zusammenbauen
+    text = (
+        "Hol dir hier deine Rolle für den Server!\n"
+        "Du brauchst mindestens eine Rolle, um alle Text- und Sprachchannels sehen zu können. "
+        "Alle Rollen geben dir die gleichen Lese- und Schreibrechte – du kannst also einfach die Rolle wählen, der du dich am stärksten zugehörig fühlst.\n\n"
+        "Klicke auf das entsprechende Emoji, um deine Rolle auszuwählen:\n\n"
+    )
+
+    for emoji, role_name in role_emojis.items():
+        text += f"{str(emoji)}: {role_name}\n"
+
+    # Nachricht senden
+    message = await rollen_channel.send(text)
+
+    # Reaktionen hinzufügen
+    for emoji in role_emojis:
+        await message.add_reaction(emoji)
+
+    # ID speichern
+    rollen_nachricht_id = message.id
+    with open("rollen_message_id.txt", "w") as f:
+        f.write(str(rollen_nachricht_id))
+
+    print(f"Neue Rollen-Nachricht gesendet mit ID {rollen_nachricht_id}")
 
 @bot.event
 async def on_member_join(member):
@@ -36,16 +83,14 @@ async def on_member_join(member):
 
     if channel and rollen_channel:
         await channel.send(
-            f"Willkommen auf den SnK Discordserver, {member.mention}!\n\n"
-            "Auf diesem Server kannst du mit anderen Mitgliedern des Forums in Kontakt treten, Postpartner suchen, oder einfach nur ein bisschen spammen. "
-            f"Um den ganzen Server zu sehen, kannst du dir selbst im Channel <#{rollen_channel.id}> eine Rolle geben. "
-            "Diese kannst du später jederzeit wechseln, indem du erneut auf das Emote klickst und ein anderes auswählst. "
-            "Wenn du Charaktere in mehreren Fraktionen spielst, kannst du auch mehrere Rollen auswählen.\n\n"
-            "Sobald du das erledigt hast, solltest du auch den Rest des Servers sehen. Die Quarantäne ist der allgemeine Spam, "
-            "in der Postpartnersuche kannst du dir jemanden zum Schreiben suchen und im Support findest du eigentlich fast immer jemanden, "
-            "der dir Fragen zur Charaktererstellung oder dem Forum an sich beantworten kann. Viel Spaß bei uns!"
+            f"Hey {member.mention}, schön, dass du da bist – willkommen auf dem SnK-Discord!\n\n"
+            f"Damit du den ganzen Server sehen kannst, schau am besten direkt in <#{rollen_channel.id}> vorbei und gib dir eine passende Rolle. "
+            "Du kannst sie jederzeit ändern oder mehrere auswählen, wenn du in mehreren Fraktionen spielst.\n\n"
+            "Sobald das erledigt ist, geht’s richtig los:\n"
+            "In **Quarantäne** kannst du dich austoben, in der **Postpartnersuche** findest du Schreibpartner, "
+            "und im **Support** ist fast immer jemand da, der dir bei Fragen weiterhilft. Viel Spaß! 🎉"
         )
-
+        
 @bot.event
 async def on_raw_reaction_add(payload):
     if payload.message_id != rollen_nachricht_id or payload.user_id == bot.user.id:
@@ -88,13 +133,20 @@ async def on_message(message):
         return
 
     content_lower = message.content.lower()
+
     if "döner" in content_lower:
-        await message.add_reaction("🌯")
+        await message.add_reaction("🥙")
     if "keks" in content_lower:
         await message.add_reaction("🍪")
+    if "ziege" in content_lower or "goat" in content_lower:
+        await message.add_reaction("🐐")
+    if "racoon" in content_lower or "waschbär" in content_lower:
+        await message.add_reaction("🦝")
 
     await bot.process_commands(message)
 
-# Startet den Bot mit dem Secret von Render (unter "Environment" → DISCORD_TOKEN eintragen)
-TOKEN = os.environ['DISCORD_TOKEN']
-bot.run(TOKEN)
+# Lade Token und starte Bot
+with open("config.json") as f:
+    config = json.load(f)
+
+bot.run(config["token"])
