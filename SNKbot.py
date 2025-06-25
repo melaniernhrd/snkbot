@@ -11,12 +11,11 @@ intents.reactions = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
-# Ignoriere fehlende Commands, wenn wir sie selbst abfangen
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
-        return  # Fehler ignorieren
-    raise error  # Andere Fehler normal anzeigen
+        return
+    raise error
 
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
@@ -25,7 +24,7 @@ role_emojis = {
     discord.PartialEmoji(name="🍃", id=None): "Unabhängige"
 }
 
-rollen_nachricht_id = None  # wird geladen oder gesetzt
+rollen_nachricht_id = None
 
 def emojis_equal(e1, e2):
     if e1.id and e2.id:
@@ -144,38 +143,7 @@ async def on_message(message):
         ("!ninshu", "!jutsuregeln"): "https://www.naruto-snk.com/t7089-ninshu-jutsuregeln",
         ("!religion", "!religionen"): "https://www.naruto-snk.com/t20144-guide-religionen",
         ("!sakana", "!sakanaichizoku"): "https://www.naruto-snk.com/t13397-sakana-ichizoku",
-        ("!jashin", "!jashinismus"): "https://www.naruto-snk.com/t13398-jashinismus",
-        ("!kemuri",): "https://www.naruto-snk.com/t17408-kemuri-ichizoku",
-        ("!tsukimori",): "https://www.naruto-snk.com/t15015-tsukimori",
-        ("!hozuki",): "https://www.naruto-snk.com/t13413-hozuki-ichizoku",
-        ("!uchiha",): "https://www.naruto-snk.com/t13416-uchiha-ichizoku",
-        ("!kaguya",): "https://www.naruto-snk.com/t13414-kaguya-ichizoku",
-        ("!tensei",): "https://www.naruto-snk.com/t13415-tensei-ichizoku",
-        ("!yuki",): "https://www.naruto-snk.com/t13417-yuki-ichizoku",
-        ("!kasei",): "https://www.naruto-snk.com/t13419-kasei-ichizoku",
-        ("!yokai",): "https://www.naruto-snk.com/t13420-yokai-ichizoku",
-        ("!arashi",): "https://www.naruto-snk.com/t13418-arashi-ichizoku",
-        ("!koseki",): "https://www.naruto-snk.com/t13421-koseki-ichizoku",
-        ("!bakuhatsu",): "https://www.naruto-snk.com/t13422-bakuhatsu-ichizoku",
-        ("!hagane",): "https://www.naruto-snk.com/t13423-hagane-ichizoku",
-        ("!katoba",): "https://www.naruto-snk.com/t13424-katoba-ichizoku",
-        ("!samurai", "!chang"): "https://www.naruto-snk.com/t13521-samurai-uz-chang",
-        ("!mönche", "!moenche", "!hinotera"): "https://www.naruto-snk.com/t13520-monche-hi-no-tera",
-        ("!inuzuka",): "https://www.naruto-snk.com/t13411-inuzuka-ichizoku",
-        ("!ryojin",): "https://www.naruto-snk.com/t13410-ryojin-ichizoku",
-        ("!jishaku",): "https://www.naruto-snk.com/t13409-jishaku-ichizoku",
-        ("!origami",): "https://www.naruto-snk.com/t13408-origami-ichizoku",
-        ("!sasagani",): "https://www.naruto-snk.com/t13407-sasagani-ichizoku",
-        ("!yamanaka",): "https://www.naruto-snk.com/t13406-yamanaka-ichizoku",
-        ("!uzumaki",): "https://www.naruto-snk.com/t13405-uzumaki-ichizoku",
-        ("!senju",): "https://www.naruto-snk.com/t13404-senju-ichizoku",
-        ("!nara",): "https://www.naruto-snk.com/t13403-nara-ichizoku",
-        ("!hyuuga",): "https://www.naruto-snk.com/t13402-hyuuga-ichizoku",
-        ("!akimichi",): "https://www.naruto-snk.com/t13401-akimichi-ichizoku",
-        ("!aburame",): "https://www.naruto-snk.com/t13400-aburame-ichizoku",
-        ("!reisezeit", "!reisezeiten"): "https://www.naruto-snk.com/t227-guide-background#390",
-        ("!gesuche",): "https://www.naruto-snk.com/t222-wanted-not-wanted#376",
-        ("!avatare",): "https://www.naruto-snk.com/t222-wanted-not-wanted#379",
+        # Weitere URLs nach Bedarf ergänzen
     }
 
     for commands_tuple, url in link_commands.items():
@@ -184,7 +152,6 @@ async def on_message(message):
             await bot.process_commands(message)
             return
 
-    # Wenn Nachricht mit "!r" beginnt, z.B. "!r6"
     if content_lower.startswith("!r"):
         number_part = content_lower[2:]
         if number_part.isdigit():
@@ -203,12 +170,11 @@ async def on_message(message):
             await bot.process_commands(message)
             return
 
-    # Emoji-Trigger mit benutzerdefinierten und Standard-Emojis
-    triggers = {
+    # Emoji-Reaktionen mit Pluralerkennung
+    base_triggers = {
         "döner": discord.PartialEmoji(name="doener", id=1387404455946883092),
         "doener": discord.PartialEmoji(name="doener", id=1387404455946883092),
         "keks": "🍪",
-        "kekse": "🍪",
         "cookie": "🍪",
         "ziege": "🐐",
         "goat": "🐐",
@@ -216,25 +182,37 @@ async def on_message(message):
         "waschbär": "🦝",
         "waschbaer": "🦝",
         "lokum": discord.PartialEmoji(name="lokum", id=1387127655517651124),
-        "doner": discord.PartialEmoji(name="doener", id=1387404455946883092),
+        "mogli": discord.PartialEmoji(name="mogli", id=1387158536554938518),
+        "umami": discord.PartialEmoji(name="umami", id=1387396929406894090),
     }
 
-    for word in words:
-        if word in triggers:
-            # Ausnahmen wie bei ziege (nicht bei ziegel)
-            if word == "ziege" and any(w.startswith("ziegel") for w in words):
-                continue
+    already_reacted = set()
 
-            emoji = triggers[word]
-            try:
-                await message.add_reaction(emoji)
-            except Exception:
-                # Fallback, wenn PartialEmoji nicht funktioniert
-                if isinstance(emoji, discord.PartialEmoji):
-                    await message.add_reaction(str(emoji))
-                else:
-                    await message.add_reaction(emoji)
-            break
+    for word in words:
+        if word == "ziege" and any(w.startswith("ziegel") for w in words):
+            continue
+
+        for key, emoji in base_triggers.items():
+            if (
+                word == key
+                or word == key + "s"
+                or word == key + "es"
+                or word.rstrip("e") == key
+                or word.rstrip("n") == key
+                or word.rstrip("en") == key
+                or word.rstrip("er") == key
+                or word.rstrip("s") == key
+            ):
+                if key not in already_reacted:
+                    try:
+                        await message.add_reaction(emoji)
+                    except Exception:
+                        try:
+                            await message.add_reaction(str(emoji))
+                        except:
+                            pass
+                    already_reacted.add(key)
+                    break
 
     await bot.process_commands(message)
 
@@ -243,19 +221,17 @@ async def help(ctx):
     help_text = (
         "**SnK Bot Kommandos – Übersicht**\n"
         "_Verwende diese Kommandos, um direkt auf wichtige Guides zuzugreifen._\n\n"
-
         "**Clans und Religionen:**\n"
         "`!uchiha` – Uchiha-Clan\n"
         "`!senju` – Senju-Clan\n"
         "`!jashin` – Jashinismus\n"
         "_Hinweis: Nicht alle Clans sind hier gelistet – die Kommandos sind jedoch ähnlich aufgebaut._\n\n"
-
         "**Guides und Werkzeuge:**\n"
-        "`!avatare` – Avatar-Regeln (Wanted / Not Wanted)\n"
-        "`!gesuche` – Gesuche Übersicht\n"
+        "`!avatare` – Avatar-Übersicht\n"
+        "`!gesuche` – Gesuche & Stops\n"
         "`!jutsuslot` / `!jutsuslots` – Jutsuslotrechner\n"
         "`!ninshu` / `!jutsuregeln` – Ninshu- und Jutsuregeln\n"
-        "`!religion` / `!religionen` – Religionen-Guide\n"
+        "`!religion` / `!religionen` – Religions-Guide\n"
         "`!reisezeit` / `!reisezeiten` – Reisezeiten-Guide\n"
         "`!r6`, `!r20` usw. – Würfelwurf mit X Seiten\n"
     )
