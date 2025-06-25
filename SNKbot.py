@@ -9,7 +9,7 @@ intents.members = True
 intents.message_content = True
 intents.reactions = True
 
-bot = commands.Bot(command_prefix="!", intents=intents)
+bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
 # Ignoriere fehlende Commands, wenn wir sie selbst abfangen
 @bot.event
@@ -17,7 +17,6 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return  # Fehler ignorieren
     raise error  # Andere Fehler normal anzeigen
-
 
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
@@ -130,9 +129,6 @@ async def on_raw_reaction_remove(payload):
                 await member.remove_roles(role)
                 print(f"{member} wurde die Rolle {role.name} entfernt.")
 
-import random
-import string
-
 @bot.event
 async def on_message(message):
     if message.author == bot.user:
@@ -142,7 +138,7 @@ async def on_message(message):
     clean_text = content_lower.translate(str.maketrans('', '', string.punctuation))
     words = clean_text.split()
 
-     # Clan-/Guide-Links via Command
+    # Clan-/Guide-Links via Command
     link_commands = {
         ("!jutsuslot", "!jutsuslots"): "https://www.naruto-snk.com/h9-jutsuslotrechner",
         ("!ninshu", "!jutsuregeln"): "https://www.naruto-snk.com/t7089-ninshu-jutsuregeln",
@@ -179,9 +175,7 @@ async def on_message(message):
         ("!aburame",): "https://www.naruto-snk.com/t13400-aburame-ichizoku",
         ("!reisezeit", "!reisezeiten"): "https://www.naruto-snk.com/t227-guide-background#390",
         ("!gesuche",): "https://www.naruto-snk.com/t222-wanted-not-wanted#376",
-         ("!avatare",): "https://www.naruto-snk.com/t222-wanted-not-wanted#379",
-        
-
+        ("!avatare",): "https://www.naruto-snk.com/t222-wanted-not-wanted#379",
     }
 
     for commands_tuple, url in link_commands.items():
@@ -189,7 +183,6 @@ async def on_message(message):
             await message.channel.send(url)
             await bot.process_commands(message)
             return
-
 
     # Wenn Nachricht mit "!r" beginnt, z.B. "!r6"
     if content_lower.startswith("!r"):
@@ -206,14 +199,14 @@ async def on_message(message):
                 await bot.process_commands(message)
                 return
         else:
-            await message.channel.send("Bitte gib nach ! ein gültiges Kommand ein.")
+            await message.channel.send("Bitte gib nach ! ein gültiges Kommando ein.")
             await bot.process_commands(message)
             return
 
     # Emoji-Trigger mit benutzerdefinierten und Standard-Emojis
     triggers = {
-        "döner": "<:doener:1387404455946883092>",
-        "doener": "<:doener:1387404455946883092>",
+        "döner": discord.PartialEmoji(name="doener", id=1387404455946883092),
+        "doener": discord.PartialEmoji(name="doener", id=1387404455946883092),
         "keks": "🍪",
         "kekse": "🍪",
         "cookie": "🍪",
@@ -222,75 +215,51 @@ async def on_message(message):
         "raccoon": "🦝",
         "waschbär": "🦝",
         "waschbaer": "🦝",
-        "lokum": "<:lokum:1387127655517651124>",
-        "mogli": "<:mogli:1387158536554938518>",
-        "umami": "<:umami:1387396929406894090>",
+        "lokum": discord.PartialEmoji(name="lokum", id=1387127655517651124),
+        "doner": discord.PartialEmoji(name="doener", id=1387404455946883092),
     }
 
     for word in words:
-        for key, emoji in triggers.items():
-            if key == word:
-                # Spezialfall: "ziege" nicht in "ziegel"
-                if key == "ziege" and word.startswith("ziegel"):
-                    continue
+        if word in triggers:
+            # Ausnahmen wie bei ziege (nicht bei ziegel)
+            if word == "ziege" and any(w.startswith("ziegel") for w in words):
+                continue
+
+            emoji = triggers[word]
+            try:
                 await message.add_reaction(emoji)
-                break
+            except Exception:
+                # Fallback, wenn PartialEmoji nicht funktioniert
+                if isinstance(emoji, discord.PartialEmoji):
+                    await message.add_reaction(str(emoji))
+                else:
+                    await message.add_reaction(emoji)
+            break
 
     await bot.process_commands(message)
 
-bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)    
-    
 @bot.command()
 async def help(ctx):
-    help_text = "**SnK Bot Kommandos – Übersicht**\n"
-    help_text += "_Verwende diese Kommandos, um direkt auf wichtige Guides & Clanseiten zuzugreifen._\n\n"
+    help_text = (
+        "**SnK Bot Kommandos – Übersicht**\n"
+        "_Verwende diese Kommandos, um direkt auf wichtige Guides zuzugreifen._\n\n"
 
-    command_links = {
-        ("!aburame",): "Aburame-Clan",
-        ("!akimichi",): "Akimichi-Clan",
-        ("!arashi",): "Arashi-Clan",
-        ("!avatare",): "Avatare – Wanted & Not Wanted",
-        ("!bakuhatsu",): "Bakuhatsu-Clan",
-        ("!chang", "!samurai"): "Samurai – Uz Chang",
-        ("!gesuche",): "Gesuche – Wanted & Not Wanted",
-        ("!hagane",): "Hagane-Clan",
-        ("!hozuki",): "Hozuki-Clan",
-        ("!hyuuga",): "Hyuuga-Clan",
-        ("!inuzuka",): "Inuzuka-Clan",
-        ("!jashin", "!jashinismus"): "Jashinismus",
-        ("!jishaku",): "Jishaku-Clan",
-        ("!jutsuslot", "!jutsuslots"): "Jutsuslot-Rechner",
-        ("!kaguya",): "Kaguya-Clan",
-        ("!kasei",): "Kasei-Clan",
-        ("!katoba",): "Katoba-Clan",
-        ("!kemuri",): "Kemuri-Clan",
-        ("!koseki",): "Koseki-Clan",
-        ("!mönche", "!moenche", "!hinotera"): "Mönche – Hi no Tera",
-        ("!nara",): "Nara-Clan",
-        ("!ninshu", "!jutsuregeln"): "Ninshu & Jutsuregeln",
-        ("!origami",): "Origami-Clan",
-        ("!reisezeit", "!reisezeiten"): "Reisezeiten-Guide",
-        ("!religion", "!religionen"): "Religions-Guide",
-        ("!ryojin",): "Ryojin-Clan",
-        ("!sakana", "!sakanaichizoku"): "Sakana-Clan",
-        ("!sasagani",): "Sasagani-Clan",
-        ("!senju",): "Senju-Clan",
-        ("!tensei",): "Tensei-Clan",
-        ("!tsukimori",): "Tsukimori",
-        ("!uchiha",): "Uchiha-Clan",
-        ("!uzumaki",): "Uzumaki-Clan",
-        ("!yamanaka",): "Yamanaka-Clan",
-        ("!yokai",): "Yokai-Clan",
-        ("!yuki",): "Yuki-Clan",
-        ("!r [Zahl]",): "Würfeln, z. B. `!r6` für einen Wurf mit 6-seitigem Würfel",
-    }
+        "**Clans und Religionen:**\n"
+        "`!uchiha` – Uchiha-Clan\n"
+        "`!senju` – Senju-Clan\n"
+        "`!jashin` – Jashinismus\n"
+        "_Hinweis: Nicht alle Clans sind hier gelistet – die Kommandos sind jedoch ähnlich aufgebaut._\n\n"
 
-    for aliases, description in sorted(command_links.items(), key=lambda x: x[1].lower()):
-        alias_list = ", ".join(aliases)
-        help_text += f"`{alias_list}` → {description}\n"
-
+        "**Guides und Werkzeuge:**\n"
+        "`!avatare` – Avatar-Regeln (Wanted / Not Wanted)\n"
+        "`!gesuche` – Gesuche Übersicht\n"
+        "`!jutsuslot` / `!jutsuslots` – Jutsuslotrechner\n"
+        "`!ninshu` / `!jutsuregeln` – Ninshu- und Jutsuregeln\n"
+        "`!religion` / `!religionen` – Religionen-Guide\n"
+        "`!reisezeit` / `!reisezeiten` – Reisezeiten-Guide\n"
+        "`!r6`, `!r20` usw. – Würfelwurf mit X Seiten\n"
+    )
     await ctx.send(help_text)
-
 
 # Bot starten
 with open("config.json") as f:
