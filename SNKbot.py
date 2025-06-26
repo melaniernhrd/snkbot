@@ -21,7 +21,7 @@ role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
     discord.PartialEmoji(name="Kumo", id=1386427146037100644): "Kumo",
     discord.PartialEmoji(name="Shinkiri", id=1386427163032551634): "Shinkiri",
-    discord.PartialEmoji(name="🍃", id=None): "Unabhängige"
+    discord.PartialEmoji(name="🍃", id=None): "Unabhängig"
 }
 
 rollen_nachricht_id = None
