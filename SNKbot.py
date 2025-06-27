@@ -1,12 +1,11 @@
 import discord
 from discord.ext import commands, tasks
 import json
-from datetime import datetime, timezone
+from datetime import datetime
+from zoneinfo import ZoneInfo  # Ab Python 3.9
 import os
 import string
 import random
-
-
 
 intents = discord.Intents.default()
 intents.members = True
@@ -119,7 +118,7 @@ async def geburtstag(ctx):
         "Verwendung:\n"
         "`!geburtstagsliste` – Alle Geburtstage anzeigen\n"
         "`!geburtstag add @User TT.MM.` – Geburtstag hinzufügen\n"
-        "`!geburtstag remove @User TT.MM.` – Geburtstag entfernen"
+        "`!geburtstag remove @User` – Geburtstag entfernen"
     )
 
 @geburtstag.command(name="add")
@@ -150,35 +149,63 @@ async def geburtstag_add(ctx, user: discord.Member, date: str):
     save_birthdays(birthdays)
     await ctx.send(f"Geburtstag von {user.mention} wurde auf {date} gesetzt.")
 
-    today = datetime.now(timezone.utc).strftime("%d.%m.")
+    # Datum für heute mit Berliner Zeitzone holen
+    berlin = ZoneInfo("Europe/Berlin")
+    today = datetime.now(berlin).strftime("%d.%m.")
+
     if date == today:
         congrats_channel = bot.get_channel(CONGRATS_CHANNEL_ID)
-        reminder_channel = bot.get_channel(REMINDER_CHANNEL_ID)
-
         if congrats_channel:
             await congrats_channel.send(get_random_birthday_message(user))
 
-        if reminder_channel:
-            mentions = " ".join(f"<@{id}>" for id in MENTION_IDS)
-            await reminder_channel.send(f"{mentions} {user.mention} hat heute Geburtstag! 🎈")
-
 @geburtstag.command(name="remove")
-async def geburtstag_remove(ctx, user: discord.Member, date: str):
+async def geburtstag_remove(ctx, user: discord.Member):
     birthdays = load_birthdays()
-    new_birthdays = [b for b in birthdays if not (b["id"] == user.id and b["date"] == date)]
+    new_birthdays = [b for b in birthdays if b["id"] != user.id]
     if len(new_birthdays) == len(birthdays):
-        await ctx.send(f"Kein Eintrag für {user.mention} am {date} gefunden.")
+        await ctx.send(f"Kein Eintrag für {user.mention} gefunden.")
         return
 
     save_birthdays(new_birthdays)
-    await ctx.send(f"Geburtstag von {user.mention} am {date} wurde entfernt.")
+    await ctx.send(f"Geburtstag von {user.mention} wurde entfernt.")
+# Hier beginnt der neue Code für bdayforum.txt
+
+@bot.command(name="forumgeb")
+async def forumgeb(ctx):
+    try:
+        with open("bdayforum.txt", "r", encoding="utf-8") as f:
+            content = f.read()
+        if content.strip():
+            await ctx.send(f"```{content}```")
+        else:
+            await ctx.send("Die Datei bdayforum.txt ist leer.")
+    except FileNotFoundError:
+        await ctx.send("Die Datei bdayforum.txt wurde nicht gefunden.")
+
+def load_bdayforum():
+    """
+    Liest die bdayforum.txt Datei ein und gibt eine Liste von (datum, name) tuples zurück.
+    Format der Zeile: TT.MM. - Name
+    Überschriften (z.B. **Monat - Monat**) werden ignoriert.
+    """
+    entries = []
+    try:
+        with open("bdayforum.txt", "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("**"):
+                    continue
+                if " - " in line:
+                    datum, name = line.split(" - ", 1)
+                    entries.append((datum.strip(), name.strip()))
+    except FileNotFoundError:
+        pass
+    return entries
 
 @tasks.loop(hours=24)
 async def birthday_check():
-    today = datetime.now(timezone.utc).strftime("%d.%m.")
-    birthdays = load_birthdays()
-    updated = False
-
+    berlin = ZoneInfo("Europe/Berlin")
+    today = datetime.now(berlin).strftime("%d.%m.")
     congrats_channel = bot.get_channel(CONGRATS_CHANNEL_ID)
     reminder_channel = bot.get_channel(REMINDER_CHANNEL_ID)
 
@@ -186,22 +213,21 @@ async def birthday_check():
         print("Geburtstagskanäle nicht gefunden.")
         return
 
-    for entry in birthdays:
-        for guild in bot.guilds:
-            member = guild.get_member(entry["id"])
-            if member:
-                if entry["name"] != member.display_name:
-                    entry["name"] = member.display_name
-                    updated = True
+    bdayforum_entries = load_bdayforum()
 
-                if entry["date"] == today:
-                    await congrats_channel.send(get_random_birthday_message(member))
-                    mentions = " ".join(f"<@{id}>" for id in MENTION_IDS)
-                    await reminder_channel.send(f"{mentions} {member.mention} hat heute Geburtstag! 🎈")
-                break
+    birthdays_today = []
+    for (datum, name) in bdayforum_entries:
+        clean_datum = datum.strip()
+        if clean_datum == today:
+            birthdays_today.append(name)
 
-    if updated:
-        save_birthdays(birthdays)
+    if birthdays_today:
+        mentions = ' '.join(f'<@{id}>' for id in MENTION_IDS)
+        msg = f"🎉 {mentions}, heute haben folgende Personen Geburtstag (Forum-Liste):\n" + "\n".join(birthdays_today)
+        await reminder_channel.send(msg)
+    else:
+        print("Heute keine Geburtstage in bdayforum.txt.")
+
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
     discord.PartialEmoji(name="Kumo", id=1386427146037100644): "Kumo",
