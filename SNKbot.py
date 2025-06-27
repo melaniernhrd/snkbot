@@ -1,8 +1,12 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 import json
+from datetime import datetime, timezone
+import os
 import string
 import random
+
+
 
 intents = discord.Intents.default()
 intents.members = True
@@ -11,11 +15,188 @@ intents.reactions = True
 
 bot = commands.Bot(command_prefix="!", intents=intents, help_command=None)
 
+from discord.ext.commands import MissingRequiredArgument, BadArgument
+
 @bot.event
 async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
+
+    if isinstance(error, MissingRequiredArgument):
+        await ctx.send("Bitte benutze das vollständige Format: `!geburtstag add @User TT.MM.`")
+        return
+
+    if isinstance(error, BadArgument):
+        await ctx.send("Bitte gib einen gültigen Benutzer und ein Datum im Format TT.MM. an.")
+        return
+
+    # Wenn anderer Fehler, wirft ihn hoch
     raise error
+
+
+# Geburtstagskonstanten
+BIRTHDAY_FILE = "bday.json"
+CONGRATS_CHANNEL_ID = 539525555276611594
+REMINDER_CHANNEL_ID = 830244075264540712
+MENTION_IDS = [475017022707597322, 408712490789371913]
+
+def load_birthdays():
+    if not os.path.isfile(BIRTHDAY_FILE):
+        with open(BIRTHDAY_FILE, "w") as f:
+            json.dump([], f)
+        return []
+    with open(BIRTHDAY_FILE, "r") as f:
+        return json.load(f)
+
+def save_birthdays(data):
+    sorted_data = sorted(data, key=lambda x: x["name"].lower())  # .lower() für case-insensitive Sortierung
+    with open(BIRTHDAY_FILE, "w") as f:
+        json.dump(sorted_data, f, indent=4)
+
+@bot.command(name="geburtstagsliste")
+async def geburtstagsliste(ctx):
+    birthdays = load_birthdays()
+    if not birthdays:
+        await ctx.send("Es sind noch keine Geburtstage gespeichert.")
+        return
+
+    # Monat-Namen in der richtigen Reihenfolge
+    months = [
+        "Januar", "Februar", "März", "April", "Mai", "Juni",
+        "Juli", "August", "September", "Oktober", "November", "Dezember"
+    ]
+
+    # Geburtstage nach Monat gruppieren: Dict mit MonatIndex (1-12) als Key
+    grouped = {i: [] for i in range(1, 13)}
+
+    for entry in birthdays:
+        # Datum z.B. "15.02."
+        try:
+            day, month, _ = entry["date"].split(".")  # z.B. "15", "02", ""
+            month = int(month)
+            grouped[month].append(entry)
+        except Exception:
+            continue  # Falls Datum falsch formatiert ist
+
+    # Ausgabe bauen
+    lines = []
+    for month_idx in range(1, 13):
+        entries = grouped[month_idx]
+        if not entries:
+            continue  # Monat überspringen, wenn keine Geburtstage
+
+        # Monatstitel
+        lines.append(f"**{months[month_idx - 1]}**")
+
+        # Geburtstage sortiert nach Tag im Monat
+        entries_sorted = sorted(entries, key=lambda e: int(e["date"].split(".")[0]))
+
+        for entry in entries_sorted:
+            name = entry.get("name", "Unbekannt")
+            date = entry["date"]
+            lines.append(f"{name}: {date}")
+
+        lines.append("")  # Leerzeile zwischen Monaten
+
+    await ctx.send("\n".join(lines))
+
+@bot.group(name="geburtstag", invoke_without_command=True)
+async def geburtstag(ctx):
+    await ctx.send(
+        "Verwendung:\n"
+        "`!geburtstagsliste` – Alle Geburtstage anzeigen\n"
+        "`!geburtstag add @User TT.MM.` – Geburtstag hinzufügen\n"
+        "`!geburtstag remove @User TT.MM.` – Geburtstag entfernen"
+    )
+
+@geburtstag.command(name="add")
+async def geburtstag_add(ctx, user: discord.Member, date: str):
+    try:
+        datetime.strptime(date, "%d.%m.")
+    except ValueError:
+        await ctx.send("Bitte gib das Datum im Format TT.MM. an.")
+        return
+
+    birthdays = load_birthdays()
+
+    # Existierenden Eintrag ersetzen oder hinzufügen
+    updated = False
+    for entry in birthdays:
+        if entry["id"] == user.id:
+            entry["date"] = date
+            entry["name"] = user.display_name
+            updated = True
+            break
+
+    if not updated:
+        birthdays.append({
+            "id": user.id,
+            "name": user.display_name,
+            "date": date
+        })
+
+    save_birthdays(birthdays)
+    await ctx.send(f"Geburtstag von {user.mention} wurde auf {date} gesetzt.")
+
+    # Direkt gratulieren, wenn heute Geburtstag eingetragen wurde
+    today = datetime.now(timezone.utc).strftime("%d.%m.")
+    if date == today:
+        congrats_channel = bot.get_channel(CONGRATS_CHANNEL_ID)
+        reminder_channel = bot.get_channel(REMINDER_CHANNEL_ID)
+
+        if congrats_channel:
+            await congrats_channel.send(
+                f"🎉 Alles Gute zum Geburtstag, {user.mention}! 🎂\n"
+                "Wir wünschen dir einen fantastischen Tag und nur das Beste im neuen Lebensjahr! 🥳"
+            )
+        if reminder_channel:
+            mentions = " ".join(f"<@{id}>" for id in MENTION_IDS)
+            await reminder_channel.send(f"{mentions} {user.mention} hat heute Geburtstag! 🎈")
+
+@geburtstag.command(name="remove")
+async def geburtstag_remove(ctx, user: discord.Member, date: str):
+    birthdays = load_birthdays()
+    new_birthdays = [b for b in birthdays if not (b["id"] == user.id and b["date"] == date)]
+    if len(new_birthdays) == len(birthdays):
+        await ctx.send(f"Kein Eintrag für {user.mention} am {date} gefunden.")
+        return
+
+    save_birthdays(new_birthdays)
+    await ctx.send(f"Geburtstag von {user.mention} am {date} wurde entfernt.")
+
+@tasks.loop(hours=24)
+async def birthday_check():
+    today = datetime.now(timezone.utc).strftime("%d.%m.")
+    birthdays = load_birthdays()
+    updated = False
+
+    congrats_channel = bot.get_channel(CONGRATS_CHANNEL_ID)
+    reminder_channel = bot.get_channel(REMINDER_CHANNEL_ID)
+
+    if not congrats_channel or not reminder_channel:
+        print("Geburtstagskanäle nicht gefunden.")
+        return
+
+    for entry in birthdays:
+        for guild in bot.guilds:
+            member = guild.get_member(entry["id"])
+            if member:
+                # Name updaten, falls geändert
+                if entry["name"] != member.display_name:
+                    entry["name"] = member.display_name
+                    updated = True
+
+                if entry["date"] == today:
+                    await congrats_channel.send(
+                        f"🎉 Alles Gute zum Geburtstag, {member.mention}! 🎂\n"
+                        "Wir wünschen dir einen fantastischen Tag und nur das Beste im neuen Lebensjahr! 🥳"
+                    )
+                    mentions = " ".join(f"<@{id}>" for id in MENTION_IDS)
+                    await reminder_channel.send(f"{mentions} {member.mention} hat heute Geburtstag! 🎈")
+                break
+
+    if updated:
+        save_birthdays(birthdays)
 
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
@@ -36,6 +217,9 @@ def emojis_equal(e1, e2):
 async def on_ready():
     global rollen_nachricht_id
     print(f"Bot ist eingeloggt als {bot.user}")
+
+    if not birthday_check.is_running():
+        birthday_check.start()
 
     try:
         with open("rollen_message_id.txt", "r") as f:
@@ -187,21 +371,19 @@ async def on_message(message):
 		("!aktivitätsbonus"): "https://www.naruto-snk.com/t19433-liste-aktivitatsbonus"
     }
 
+ 
     for commands_tuple, url in link_commands.items():
         if content_lower in commands_tuple:
             await message.channel.send(url)
             await bot.process_commands(message)
             return
 
-    # Würfel-Logik
     if content_lower.startswith("!r"):
         number_part = content_lower[2:].strip()
-
         if not number_part:
             await message.channel.send("Bitte gib eine Zahl größer als 0 an.")
             await bot.process_commands(message)
             return
-
         if number_part.isdigit():
             sides = int(number_part)
             if sides > 0:
@@ -211,12 +393,9 @@ async def on_message(message):
                 await message.channel.send("Bitte gib eine Zahl größer als 0 an.")
         else:
             await message.channel.send("Bitte gib nach !r eine gültige Zahl an.")
-
         await bot.process_commands(message)
         return
 
-
-    # Emoji-Reaktionen mit Pluralerkennung
     base_triggers = {
         "döner": discord.PartialEmoji(name="doener", id=1387404455946883092),
         "doener": discord.PartialEmoji(name="doener", id=1387404455946883092),
@@ -237,16 +416,11 @@ async def on_message(message):
     for word in words:
         if word == "ziege" and any(w.startswith("ziegel") for w in words):
             continue
-
         for key, emoji in base_triggers.items():
             if (
-                word == key
-                or word == key + "s"
-                or word == key + "es"
-                or word.rstrip("e") == key
-                or word.rstrip("n") == key
-                or word.rstrip("en") == key
-                or word.rstrip("er") == key
+                word == key or word == key + "s" or word == key + "es"
+                or word.rstrip("e") == key or word.rstrip("n") == key
+                or word.rstrip("en") == key or word.rstrip("er") == key
                 or word.rstrip("s") == key
             ):
                 if key not in already_reacted:
@@ -273,8 +447,11 @@ async def help(ctx):
         "`!jashin` – Jashinismus\n"
         "_Hinweis: Nicht alle Clans sind hier gelistet – die Kommandos sind jedoch ähnlich aufgebaut._\n\n"
         "**Guides und Werkzeuge:**\n"
-		"`!aktivitätsbonus` – Aktivitätenbonus-Liste\n"
+        "`!aktivitätsbonus` – Aktivitätenbonus-Liste\n"
         "`!avatare` – Avatar-Übersicht\n"
+        "`!geburtstagsliste` – Geburtstagsliste\n"
+        "`!geburtstag add` – Hinzufügen: Dein @ TT.MM.\n"
+        "`!geburtstag remove` – Entfernen: Dein @ TT.MM.\n"
         "`!gesuche` – Gesuche & Stops\n"
         "`!jutsuslot` / `!jutsuslots` – Jutsuslotrechner\n"
         "`!missionsverwaltung` / `!missionsv` – Missionsverwaltung\n"
