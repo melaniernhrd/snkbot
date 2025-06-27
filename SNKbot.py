@@ -40,6 +40,19 @@ CONGRATS_CHANNEL_ID = 539525555276611594
 REMINDER_CHANNEL_ID = 830244075264540712
 MENTION_IDS = [475017022707597322, 408712490789371913]
 
+# Neue Geburtstagsnachrichten
+BIRTHDAY_MESSAGES = [
+    "Woohoo! Happy Birthday, {mention}! Möge dein Tag wundervoll sein! ✨",
+    "Alles Liebe zum Geburtstag, {mention}! Lass dich feiern und genieß den Kuchen! 🍰",
+    "Hey {mention}, wieder ein Level-Up geschafft! Herzlichen Glückwunsch! 🎊",
+    "Cheers, {mention}! Auf ein fantastisches neues Lebensjahr! 🎉",
+    "Alles Gute zum Geburtstag, {mention}! 🎂 Möge dein Tag voller Freude sein!",
+      "{mention}, alles Liebe zum Geburtstag! Genieße deinen besonderen Tag! 🍰",
+]
+
+def get_random_birthday_message(user):
+    return random.choice(BIRTHDAY_MESSAGES).format(mention=user.mention)
+
 def load_birthdays():
     if not os.path.isfile(BIRTHDAY_FILE):
         with open(BIRTHDAY_FILE, "w") as f:
@@ -119,7 +132,6 @@ async def geburtstag_add(ctx, user: discord.Member, date: str):
 
     birthdays = load_birthdays()
 
-    # Existierenden Eintrag ersetzen oder hinzufügen
     updated = False
     for entry in birthdays:
         if entry["id"] == user.id:
@@ -138,17 +150,14 @@ async def geburtstag_add(ctx, user: discord.Member, date: str):
     save_birthdays(birthdays)
     await ctx.send(f"Geburtstag von {user.mention} wurde auf {date} gesetzt.")
 
-    # Direkt gratulieren, wenn heute Geburtstag eingetragen wurde
     today = datetime.now(timezone.utc).strftime("%d.%m.")
     if date == today:
         congrats_channel = bot.get_channel(CONGRATS_CHANNEL_ID)
         reminder_channel = bot.get_channel(REMINDER_CHANNEL_ID)
 
         if congrats_channel:
-            await congrats_channel.send(
-                f"🎉 Alles Gute zum Geburtstag, {user.mention}! 🎂\n"
-                "Wir wünschen dir einen fantastischen Tag und nur das Beste im neuen Lebensjahr! 🥳"
-            )
+            await congrats_channel.send(get_random_birthday_message(user))
+
         if reminder_channel:
             mentions = " ".join(f"<@{id}>" for id in MENTION_IDS)
             await reminder_channel.send(f"{mentions} {user.mention} hat heute Geburtstag! 🎈")
@@ -181,23 +190,18 @@ async def birthday_check():
         for guild in bot.guilds:
             member = guild.get_member(entry["id"])
             if member:
-                # Name updaten, falls geändert
                 if entry["name"] != member.display_name:
                     entry["name"] = member.display_name
                     updated = True
 
                 if entry["date"] == today:
-                    await congrats_channel.send(
-                        f"🎉 Alles Gute zum Geburtstag, {member.mention}! 🎂\n"
-                        "Wir wünschen dir einen fantastischen Tag und nur das Beste im neuen Lebensjahr! 🥳"
-                    )
+                    await congrats_channel.send(get_random_birthday_message(member))
                     mentions = " ".join(f"<@{id}>" for id in MENTION_IDS)
                     await reminder_channel.send(f"{mentions} {member.mention} hat heute Geburtstag! 🎈")
                 break
 
     if updated:
         save_birthdays(birthdays)
-
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
     discord.PartialEmoji(name="Kumo", id=1386427146037100644): "Kumo",
