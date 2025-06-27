@@ -133,42 +133,88 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    content_lower = message.content.lower()
+    if not message.content.strip():  # Ignoriere leere Nachrichten (z.B. Sticker)
+        return
+
+    content_lower = message.content.lower().strip()
+
+    # 🚫 Wenn jemand nur "!" schreibt → ignoriere
+    if content_lower == "!":
+        return
+
     clean_text = content_lower.translate(str.maketrans('', '', string.punctuation))
     words = clean_text.split()
 
-    # Clan-/Guide-Links via Command
+    # Clan-/Guide-Links
     link_commands = {
         ("!jutsuslot", "!jutsuslots"): "https://www.naruto-snk.com/h9-jutsuslotrechner",
         ("!ninshu", "!jutsuregeln"): "https://www.naruto-snk.com/t7089-ninshu-jutsuregeln",
         ("!religion", "!religionen"): "https://www.naruto-snk.com/t20144-guide-religionen",
         ("!sakana", "!sakanaichizoku"): "https://www.naruto-snk.com/t13397-sakana-ichizoku",
-        # Weitere URLs nach Bedarf ergänzen
+        ("!jashin", "!jashinismus"): "https://www.naruto-snk.com/t13398-jashinismus",
+        ("!kemuri",): "https://www.naruto-snk.com/t17408-kemuri-ichizoku",
+        ("!tsukimori",): "https://www.naruto-snk.com/t15015-tsukimori",
+        ("!hozuki",): "https://www.naruto-snk.com/t13413-hozuki-ichizoku",
+        ("!uchiha",): "https://www.naruto-snk.com/t13416-uchiha-ichizoku",
+        ("!kaguya",): "https://www.naruto-snk.com/t13414-kaguya-ichizoku",
+        ("!tensei",): "https://www.naruto-snk.com/t13415-tensei-ichizoku",
+        ("!yuki",): "https://www.naruto-snk.com/t13417-yuki-ichizoku",
+        ("!kasei",): "https://www.naruto-snk.com/t13419-kasei-ichizoku",
+        ("!yokai",): "https://www.naruto-snk.com/t13420-yokai-ichizoku",
+        ("!arashi",): "https://www.naruto-snk.com/t13418-arashi-ichizoku",
+        ("!koseki",): "https://www.naruto-snk.com/t13421-koseki-ichizoku",
+        ("!bakuhatsu",): "https://www.naruto-snk.com/t13422-bakuhatsu-ichizoku",
+        ("!hagane",): "https://www.naruto-snk.com/t13423-hagane-ichizoku",
+        ("!katoba",): "https://www.naruto-snk.com/t13424-katoba-ichizoku",
+        ("!samurai", "!uzchang"): "https://www.naruto-snk.com/t13521-samurai-uz-chang",
+        ("!mönche", "!moenche", "!hinotera"): "https://www.naruto-snk.com/t13520-monche-hi-no-tera",
+        ("!inuzuka",): "https://www.naruto-snk.com/t13411-inuzuka-ichizoku",
+        ("!ryojin",): "https://www.naruto-snk.com/t13410-ryojin-ichizoku",
+        ("!jishaku",): "https://www.naruto-snk.com/t13409-jishaku-ichizoku",
+        ("!origami",): "https://www.naruto-snk.com/t13408-origami-ichizoku",
+        ("!sasagani",): "https://www.naruto-snk.com/t13407-sasagani-ichizoku",
+        ("!yamanaka",): "https://www.naruto-snk.com/t13406-yamanaka-ichizoku",
+        ("!uzumaki",): "https://www.naruto-snk.com/t13405-uzumaki-ichizoku",
+        ("!senju",): "https://www.naruto-snk.com/t13404-senju-ichizoku",
+        ("!nara",): "https://www.naruto-snk.com/t13403-nara-ichizoku",
+        ("!hyuuga",): "https://www.naruto-snk.com/t13402-hyuuga-ichizoku",
+        ("!akimichi",): "https://www.naruto-snk.com/t13401-akimichi-ichizoku",
+        ("!aburame",): "https://www.naruto-snk.com/t13400-aburame-ichizoku",
+        ("!reisezeit", "!reisezeiten"): "https://www.naruto-snk.com/t227-guide-background#390",
+        ("!gesuche",): "https://www.naruto-snk.com/t222-wanted-not-wanted#376",
+        ("!avatare",): "https://www.naruto-snk.com/t222-wanted-not-wanted#379",
+        ("!missionsverwaltung", "!missionsv"): "https://www.naruto-snk.com/t18668-missionsverwaltung",
+		("!aktivitätsbonus"): "https://www.naruto-snk.com/t19433-liste-aktivitatsbonus"
     }
 
     for commands_tuple, url in link_commands.items():
-        if content_lower.strip() in commands_tuple:
+        if content_lower in commands_tuple:
             await message.channel.send(url)
             await bot.process_commands(message)
             return
 
+    # Würfel-Logik
     if content_lower.startswith("!r"):
-        number_part = content_lower[2:]
+        number_part = content_lower[2:].strip()
+
+        if not number_part:
+            await message.channel.send("Bitte gib eine Zahl größer als 0 an.")
+            await bot.process_commands(message)
+            return
+
         if number_part.isdigit():
             sides = int(number_part)
             if sides > 0:
                 result = random.randint(1, sides)
                 await message.channel.send(str(result))
-                await bot.process_commands(message)
-                return
             else:
                 await message.channel.send("Bitte gib eine Zahl größer als 0 an.")
-                await bot.process_commands(message)
-                return
         else:
-            await message.channel.send("Bitte gib nach ! ein gültiges Kommando ein.")
-            await bot.process_commands(message)
-            return
+            await message.channel.send("Bitte gib nach !r eine gültige Zahl an.")
+
+        await bot.process_commands(message)
+        return
+
 
     # Emoji-Reaktionen mit Pluralerkennung
     base_triggers = {
@@ -227,9 +273,11 @@ async def help(ctx):
         "`!jashin` – Jashinismus\n"
         "_Hinweis: Nicht alle Clans sind hier gelistet – die Kommandos sind jedoch ähnlich aufgebaut._\n\n"
         "**Guides und Werkzeuge:**\n"
+		"`!aktivitätsbonus` – Aktivitätenbonus-Liste\n"
         "`!avatare` – Avatar-Übersicht\n"
         "`!gesuche` – Gesuche & Stops\n"
         "`!jutsuslot` / `!jutsuslots` – Jutsuslotrechner\n"
+        "`!missionsverwaltung` / `!missionsv` – Missionsverwaltung\n"
         "`!ninshu` / `!jutsuregeln` – Ninshu- und Jutsuregeln\n"
         "`!religion` / `!religionen` – Religions-Guide\n"
         "`!reisezeit` / `!reisezeiten` – Reisezeiten-Guide\n"
