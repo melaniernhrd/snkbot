@@ -213,6 +213,23 @@ async def birthday_check():
         print("Geburtstagskanäle nicht gefunden.")
         return
 
+     ### --- HIER: Verwaiste Geburtstage entfernen --- ###
+    guild = bot.get_guild(539503573848031234)  
+    if guild:
+        birthdays = load_birthdays()
+        valid_birthdays = []
+
+        for entry in birthdays:
+            member = guild.get_member(entry["id"])
+            if member is not None:
+                valid_birthdays.append(entry)
+            else:
+                print(f"Entferne {entry['name']} (ID {entry['id']}) aus Geburtstagsliste – nicht mehr auf dem Server.")
+
+        if len(valid_birthdays) != len(birthdays):
+            save_birthdays(valid_birthdays)
+            print("Verwaiste Einträge entfernt und bday.json aktualisiert.")
+    
     bdayforum_entries = load_bdayforum()
 
     birthdays_today = []
@@ -305,6 +322,15 @@ async def on_member_join(member):
             "In **Quarantäne** kannst du dich austoben, in der **Postpartnersuche** findest du Schreibpartner, "
             "und im **Support** ist fast immer jemand da, der dir bei Fragen weiterhilft. Viel Spaß!"
         )
+        
+@bot.event
+async def on_member_remove(member):
+    birthdays = load_birthdays()
+    new_birthdays = [b for b in birthdays if b["id"] != member.id]
+
+    if len(new_birthdays) != len(birthdays):
+        save_birthdays(new_birthdays)
+        print(f"Geburtstagseintrag von {member} wurde entfernt, da der User den Server verlassen hat.")
 
 @bot.event
 async def on_raw_reaction_add(payload):
@@ -481,7 +507,7 @@ async def help(ctx):
         "`!avatare` – Avatar-Übersicht\n"
         "`!geburtstagsliste` – Geburtstagsliste\n"
         "`!geburtstag add` – Hinzufügen: Dein @ TT.MM.\n"
-        "`!geburtstag remove` – Entfernen: Dein @ TT.MM.\n"
+        "`!geburtstag remove` – Entfernen: Dein @\n"
         "`!gesuche` – Gesuche & Stops\n"
         "`!jutsuslot` / `!jutsuslots` – Jutsuslotrechner\n"
         "`!missionsverwaltung` / `!missionsv` – Missionsverwaltung\n"
