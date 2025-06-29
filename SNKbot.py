@@ -1,7 +1,7 @@
 import discord
 from discord.ext import commands, tasks
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo  # Ab Python 3.9
 import os
 import string
@@ -517,6 +517,39 @@ async def help(ctx):
         "`!r6`, `!r20` usw. – Würfelwurf mit X Seiten\n"
     )
     await ctx.send(help_text)
+    
+@bot.command(name="bonuszeit")
+async def bonuszeit(ctx):
+    tz = ZoneInfo("Europe/Berlin")
+    first_bonus_start = datetime(2025, 6, 29, 18, 1, tzinfo=tz)
+    now = datetime.now(tz)
+    period = timedelta(days=14)
+
+    if now < first_bonus_start:
+        # Bonuszeit noch nicht gestartet
+        await ctx.send(f"Bonuszeit startet erst am {first_bonus_start.strftime('%d.%m.%Y um %H:%M')}!")
+        return
+
+    # Berechne die Anzahl der Perioden, die komplett vergangen sind
+    delta = now - first_bonus_start
+    periods_passed = delta // period
+
+    # Start der aktuellen Periode
+    current_start = first_bonus_start + periods_passed * period
+    # Ende ist exakt 18:00, also 1 Minute vor 18:01 des nächsten Tages nach 14 Tagen
+    current_end = current_start + period - timedelta(minutes=1)
+    next_start = current_end + timedelta(minutes=1)
+
+    time_left = current_end - now
+
+    days = time_left.days
+    hours, remainder = divmod(time_left.seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+
+    await ctx.send(
+         f"🕒 Der Aktivitätsbonus läuft noch **{days} Tage, {hours} Stunden und {minutes} Minuten**.\n"
+        f"(Ende: {current_end.strftime('%d.%m.%Y %H:%M Uhr')})"
+    )
 
 # Bot starten
 with open("config.json") as f:
