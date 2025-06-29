@@ -244,6 +244,14 @@ async def birthday_check():
         await reminder_channel.send(msg)
     else:
         print("Heute keine Geburtstage in bdayforum.txt.")
+        
+     
+    birthdays = load_birthdays()
+    for entry in birthdays:
+        if entry["date"] == today:
+            member = guild.get_member(entry["id"])
+            if member:
+                await congrats_channel.send(get_random_birthday_message(member))
 
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
