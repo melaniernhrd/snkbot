@@ -505,6 +505,7 @@ async def help(ctx):
         "**Guides und Werkzeuge:**\n"
         "`!aktivitätsbonus` – Aktivitätenbonus-Liste\n"
         "`!avatare` – Avatar-Übersicht\n"
+        "`!bonuszeit`– Aktivitätsbonus Countdown\n"
         "`!geburtstagsliste` – Geburtstagsliste\n"
         "`!geburtstag add` – Hinzufügen: Dein @ TT.MM.\n"
         "`!geburtstag remove` – Entfernen: Dein @\n"
