@@ -44,7 +44,7 @@ BIRTHDAY_MESSAGES = [
     "Woohoo! Happy Birthday, {mention}! Möge dein Tag wundervoll sein! ✨",
     "Alles Liebe zum Geburtstag, {mention}! Lass dich feiern und genieß den Kuchen! 🍰",
     "Hey {mention}, wieder ein Level-Up geschafft! Herzlichen Glückwunsch! 🎊",
-    "Cheers, {mention}! Auf ein fantastisches neues Lebensjahr! 🎉",
+    "Wir beglückwünschen heute, {mention}! Auf ein fantastisches neues Lebensjahr! 🎉",
     "Alles Gute zum Geburtstag, {mention}! 🎂 Möge dein Tag voller Freude sein!",
       "{mention}, alles Liebe zum Geburtstag! Genieße deinen besonderen Tag! 🍰",
 ]
@@ -122,7 +122,7 @@ async def geburtstag(ctx):
     )
 
 @geburtstag.command(name="add")
-async def geburtstag_add(ctx, user: discord.Member, date: str):
+async def geburtstag_add(ctx, user: discord.Member, *, date: str):
     try:
         datetime.strptime(date, "%d.%m.")
     except ValueError:
@@ -131,28 +131,32 @@ async def geburtstag_add(ctx, user: discord.Member, date: str):
 
     birthdays = load_birthdays()
 
-    updated = False
     for entry in birthdays:
         if entry["id"] == user.id:
-            entry["date"] = date
-            entry["name"] = user.display_name
-            updated = True
-            break
+            if entry["date"] == date:
+                await ctx.send(f"{user.mention} steht bereits mit dem Datum {date} auf der Liste.")
+                return
+            else:
+                await ctx.send(
+                    f"{user.mention} ist schon mit dem Datum {entry['date']} eingetragen. "
+                    f"Ich aktualisiere es auf {date}."
+                )
+                entry["date"] = date
+                entry["name"] = user.display_name
+                save_birthdays(birthdays)
+                return
 
-    if not updated:
-        birthdays.append({
-            "id": user.id,
-            "name": user.display_name,
-            "date": date
-        })
-
+    # Falls User noch NICHT eingetragen
+    birthdays.append({
+        "id": user.id,
+        "name": user.display_name,
+        "date": date
+    })
     save_birthdays(birthdays)
-    await ctx.send(f"Geburtstag von {user.mention} wurde auf {date} gesetzt.")
+    await ctx.send(f"Geburtstag von {user.mention} wurde auf {date} gesetzt. 🎉")
 
-    # Datum für heute mit Berliner Zeitzone holen
     berlin = ZoneInfo("Europe/Berlin")
     today = datetime.now(berlin).strftime("%d.%m.")
-
     if date == today:
         congrats_channel = bot.get_channel(CONGRATS_CHANNEL_ID)
         if congrats_channel:
@@ -201,11 +205,24 @@ def load_bdayforum():
     except FileNotFoundError:
         pass
     return entries
+                           
+BIRTHDAY_LOG_FILE = "birthday_log.json"
 
+def load_birthday_log():
+    try:
+        with open(BIRTHDAY_LOG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"last_run": "", "congratulated_users": {}}
+
+def save_birthday_log(log):
+    with open(BIRTHDAY_LOG_FILE, "w", encoding="utf-8") as f:
+        json.dump(log, f, indent=4)
+        
 @tasks.loop(hours=24)
 async def birthday_check():
     berlin = ZoneInfo("Europe/Berlin")
-    today = datetime.now(berlin).strftime("%d.%m.")
+    today = datetime.now(berlin).strftime("%d.%m.%Y")  # besser: ganzes Datum
     congrats_channel = bot.get_channel(CONGRATS_CHANNEL_ID)
     reminder_channel = bot.get_channel(REMINDER_CHANNEL_ID)
 
@@ -213,45 +230,54 @@ async def birthday_check():
         print("Geburtstagskanäle nicht gefunden.")
         return
 
-     ### --- HIER: Verwaiste Geburtstage entfernen --- ###
-    guild = bot.get_guild(539503573848031234)  
+    # --- Verwaiste Geburtstage entfernen ---
+    guild = bot.get_guild(539503573848031234)
     if guild:
         birthdays = load_birthdays()
         valid_birthdays = []
-
         for entry in birthdays:
             member = guild.get_member(entry["id"])
-            if member is not None:
+            if member:
                 valid_birthdays.append(entry)
             else:
                 print(f"Entferne {entry['name']} (ID {entry['id']}) aus Geburtstagsliste – nicht mehr auf dem Server.")
-
         if len(valid_birthdays) != len(birthdays):
             save_birthdays(valid_birthdays)
             print("Verwaiste Einträge entfernt und bday.json aktualisiert.")
-    
-    bdayforum_entries = load_bdayforum()
+            
+        birthdays_today = []
+        for entry in load_birthdays():
+            if entry["date"] == today[:6]:
+                birthdays_today.append(entry)
 
-    birthdays_today = []
-    for (datum, name) in bdayforum_entries:
-        clean_datum = datum.strip()
-        if clean_datum == today:
-            birthdays_today.append(name)
+        log = load_birthday_log()
+        congratulated = log.get("congratulated_users", {})
+        last_run = log.get("last_run", "")
 
-    if birthdays_today:
-        mentions = ' '.join(f'<@{id}>' for id in MENTION_IDS)
-        msg = f"🎉 {mentions}, heute haben folgende Personen Geburtstag (Forum-Liste):\n" + "\n".join(birthdays_today)
-        await reminder_channel.send(msg)
-    else:
-        print("Heute keine Geburtstage in bdayforum.txt.")
-        
-     
-    birthdays = load_birthdays()
-    for entry in birthdays:
-        if entry["date"] == today:
-            member = guild.get_member(entry["id"])
-            if member:
-                await congrats_channel.send(get_random_birthday_message(member))
+        if birthdays_today:
+            for entry in birthdays_today:
+                user_id = str(entry["id"])
+                name = entry["name"]
+                if user_id in congratulated and congratulated[user_id] == today:
+                    print(f"{name} wurde heute schon gratuliert.")
+                    continue
+
+                await congrats_channel.send(f"🎉 Alles Gute zum Geburtstag, <@{user_id}>! 🎂")
+                congratulated[user_id] = today
+
+            if last_run != today:
+                await reminder_channel.send(
+                    "✅ Geburtstags-Reminder erledigt!"
+                )
+            else:
+                print("Reminder wurde heute schon geschickt – Ping entfällt.")
+        else:
+            print("Heute keine Geburtstage in bday.json.")
+
+    # Log speichern
+    log["last_run"] = today
+    log["congratulated_users"] = congratulated
+    save_birthday_log(log)
 
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
@@ -432,10 +458,33 @@ async def on_message(message):
         ("!gesuche",): "https://www.naruto-snk.com/t222-wanted-not-wanted#376",
         ("!avatare",): "https://www.naruto-snk.com/t222-wanted-not-wanted#379",
         ("!missionsverwaltung", "!missionsv"): "https://www.naruto-snk.com/t18668-missionsverwaltung",
-		("!aktivitätsbonus"): "https://www.naruto-snk.com/t19433-liste-aktivitatsbonus"
+		("!aktivitätsbonus"): "https://www.naruto-snk.com/t19433-liste-aktivitatsbonus",
+        ("!bijuukontrolle"): "https://www.naruto-snk.com/t13426-biju-kontrolle",
+        ("!jikukan"): "https://www.naruto-snk.com/t13436-jikukan-ninjutsu",
+        ("!kugutsu"): "https://www.naruto-snk.com/t13435-kugutsu-ninjutsu",
+        ("!fuin"): "https://www.naruto-snk.com/t13434-fuinjutsu",
+        ("!senjutsu"): "https://www.naruto-snk.com/t13432-senjutsu",
+        ("!kekkai"): "https://www.naruto-snk.com/t13430-kekkai-ninjutsu",
+        ("!kt", "!kanchitaipu"): "https://www.naruto-snk.com/t13429-kanchi-taipu",
+        ("!iryo"): "https://www.naruto-snk.com/t13428-iryoninjutsu",
+        ("!ht", "!hachimontonko"): "https://www.naruto-snk.com/t13427-hachimon-tonko",
+        ("!grundjutsu"): "https://www.naruto-snk.com/t305-akademiejutsu-grundwissen",
+        ("!suiton"): "https://www.naruto-snk.com/t311-suiton-ninjutsu",
+        ("!raiton"): "https://www.naruto-snk.com/t309-raiton-ninjutsu",
+        ("!doton"): "https://www.naruto-snk.com/t310-doton-ninjutsu",
+        ("!fuuton"): "https://www.naruto-snk.com/t308-fuuton-ninjutsu",
+        ("!katon"): "https://www.naruto-snk.com/t307-katon-ninjutsu",
+        ("!kinjutsu"): "https://www.naruto-snk.com/t293-kinjutsu",
+        ("!taijutsu"): "https://www.naruto-snk.com/t313-taijutsu",
+        ("!haar"): "https://www.naruto-snk.com/t14680-haartechniken",
+        ("!tinte"): "https://www.naruto-snk.com/t15597-tintentechniken",
+        ("!genjutsu"): "https://www.naruto-snk.com/t312-genjutsu",
+        ("!lwaffen"): "https://www.naruto-snk.com/t16234-legendare-waffen",
+        ("!eninjutsu"): "https://www.naruto-snk.com/t306-elementlose-ninjutsu",
+        ("!shurikenjutsu"): "https://www.naruto-snk.com/t20557-shurikenjutsu"
+        
     }
 
- 
     for commands_tuple, url in link_commands.items():
         if content_lower in commands_tuple:
             await message.channel.send(url)
@@ -510,6 +559,28 @@ async def help(ctx):
         "`!senju` – Senju-Clan\n"
         "`!jashin` – Jashinismus\n"
         "_Hinweis: Nicht alle Clans sind hier gelistet – die Kommandos sind jedoch ähnlich aufgebaut._\n\n"
+        "**Ausbildungen:**\n"
+         "`!bijuukontrolle` - Bijuu-Kontrolle\n"
+        "`!hachimontonko` / `!ht` - Hachimon Tonko\n"
+        "`!iryo` - Iryouninjutsu\n"
+         "`!jikukan` - Jikukan Ninjutsu\n"
+         "`!kanchitaipu` / `!kt` - Kanchi Taipu\n"
+         "`!kekkai` - Kekkai Ninjutsu\n"
+         "`!kugutsu` - Kugutsu Ninjutsu\n"
+         "`!senjutsu` - Senjutsu\n\n"
+		"**Jutsulisten:**\n"
+        "`!doton` - Doton-Techniken\n"
+        "`!eninjutsu` - Elementlose Ninjutsu\n"
+        "`!fuuton` - Fuuton-Techniken\n"
+         "`!genjutsu` - Genjutsu\n"
+        "`!grundjutsu` - Akademiejutsu & Grundwissen\n"
+         "`!haar` - Haar-Techniken\n"
+         "`!katon` - Katon-Techniken\n"
+     	 "`!raiton` - Raiton-Techniken\n"
+         "`!shurikenjutsu` - Shurikenjutsu\n"
+         "`!suiton` - Suiton-Techniken\n"
+        "`!taijutsu` - Taijutsu\n"
+        "`!tinte` - Tinten-Techniken\n\n"
         "**Guides und Werkzeuge:**\n"
         "`!aktivitätsbonus` – Aktivitätenbonus-Liste\n"
         "`!avatare` – Avatar-Übersicht\n"
@@ -525,6 +596,7 @@ async def help(ctx):
         "`!reisezeit` / `!reisezeiten` – Reisezeiten-Guide\n"
         "`!r6`, `!r20` usw. – Würfelwurf mit X Seiten\n"
     )
+    
     await ctx.send(help_text)
     
 @bot.command(name="bonuszeit")
