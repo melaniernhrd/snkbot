@@ -407,20 +407,19 @@ async def on_message(message):
     if message.author == bot.user:
         return
 
-    if not message.content.strip():  # Ignoriere leere Nachrichten (z.B. Sticker)
+    if not message.content.strip():
         return
 
-    content_lower = message.content.lower().strip()
+    content = message.content.strip()
+    content_lower = content.lower()
 
-    # 🚫 Wenn jemand nur "!" schreibt → ignoriere
-    if content_lower == "!":
+    # 🚫 Nur "!" oder "! " ignorieren
+    if content == "!" or content == "! ":
         return
 
-    clean_text = content_lower.translate(str.maketrans('', '', string.punctuation))
-    words = clean_text.split()
-
-    # Clan-/Guide-Links
-    link_commands = {
+    # --- Wenn Nachricht mit "!" beginnt: Command- oder Link-Shortcut ---
+    if content_lower.startswith("!"):
+        link_commands = {
         ("!jutsuslot", "!jutsuslots"): "https://www.naruto-snk.com/h9-jutsuslotrechner",
         ("!ninshu", "!jutsuregeln"): "https://www.naruto-snk.com/t7089-ninshu-jutsuregeln",
         ("!religion", "!religionen"): "https://www.naruto-snk.com/t20144-guide-religionen",
@@ -482,32 +481,34 @@ async def on_message(message):
         ("!lwaffen"): "https://www.naruto-snk.com/t16234-legendare-waffen",
         ("!eninjutsu"): "https://www.naruto-snk.com/t306-elementlose-ninjutsu",
         ("!shurikenjutsu"): "https://www.naruto-snk.com/t20557-shurikenjutsu"
-        
-    }
+        }
 
-    for commands_tuple, url in link_commands.items():
-        if content_lower in commands_tuple:
-            await message.channel.send(url)
-            await bot.process_commands(message)
-            return
+        for commands_tuple, url in link_commands.items():
+            if content_lower in commands_tuple:
+                await message.channel.send(url)
+                return
 
-    if content_lower.startswith("!r"):
-        number_part = content_lower[2:].strip()
-        if not number_part:
-            await message.channel.send("Bitte gib eine Zahl größer als 0 an.")
-            await bot.process_commands(message)
-            return
-        if number_part.isdigit():
-            sides = int(number_part)
-            if sides > 0:
-                result = random.randint(1, sides)
-                await message.channel.send(str(result))
-            else:
+        if content_lower.startswith("!r"):
+            number_part = content_lower[2:].strip()
+            if not number_part:
                 await message.channel.send("Bitte gib eine Zahl größer als 0 an.")
-        else:
-            await message.channel.send("Bitte gib nach !r eine gültige Zahl an.")
+                return
+            if number_part.isdigit():
+                sides = int(number_part)
+                if sides > 0:
+                    result = random.randint(1, sides)
+                    await message.channel.send(str(result))
+                else:
+                    await message.channel.send("Bitte gib eine Zahl größer als 0 an.")
+            else:
+                await message.channel.send("Bitte gib nach !r eine gültige Zahl an.")
+            return
+
         await bot.process_commands(message)
         return
+
+    clean_text = content_lower.translate(str.maketrans('', '', string.punctuation))
+    words = clean_text.split()
 
     base_triggers = {
         "döner": discord.PartialEmoji(name="doener", id=1387404455946883092),
