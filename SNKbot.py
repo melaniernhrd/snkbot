@@ -45,8 +45,11 @@ BIRTHDAY_MESSAGES = [
     "Alles Liebe zum Geburtstag, {mention}! Lass dich feiern und genieß den Kuchen! 🍰",
     "Hey {mention}, wieder ein Level-Up geschafft! Herzlichen Glückwunsch! 🎊",
     "Wir beglückwünschen heute, {mention}! Auf ein fantastisches neues Lebensjahr! 🎉",
-    "Alles Gute zum Geburtstag, {mention}! 🎂 Möge dein Tag voller Freude sein!",
-      "{mention}, alles Liebe zum Geburtstag! Genieße deinen besonderen Tag! 🍰",
+    "Alles Gute zum Geburtstag, {mention}! Möge dein Tag voller Freude sein!",
+    "{mention}, alles Liebe zum Geburtstag! Genieße deinen besonderen Tag! 🍰",
+    "Herzlichen Glückwunsch, {mention}! Genieß deinen Tag in vollen Zügen. 🎈",
+    "Viel Freude und Glück, {mention}! Alles Gute zum Geburtstag!",
+	"Alles Liebe und eine tollen Tag für dich, {mention}!"
 ]
 
 def get_random_birthday_message(user):
@@ -230,23 +233,36 @@ async def birthday_check():
         print("Geburtstagskanäle nicht gefunden.")
         return
 
-    # --- Verwaiste Geburtstage entfernen ---
+    # --- Verwaiste Geburtstage entfernen + Namen aktualisieren ---
     guild = bot.get_guild(539503573848031234)
     if guild:
         birthdays = load_birthdays()
         valid_birthdays = []
+        names_updated = False
+
         for entry in birthdays:
-            member = guild.get_member(entry["id"])
+            try:
+                member = await guild.fetch_member(entry["id"])
+            except discord.NotFound:
+                member = None
+
             if member:
+                # Display-Name vergleichen
+                if entry.get("name") != member.display_name:
+                    print(f"Name geändert: {entry['name']} ➜ {member.display_name}")
+                    entry["name"] = member.display_name
+                    names_updated = True
                 valid_birthdays.append(entry)
             else:
                 print(f"Entferne {entry['name']} (ID {entry['id']}) aus Geburtstagsliste – nicht mehr auf dem Server.")
-        if len(valid_birthdays) != len(birthdays):
+
+        if names_updated or len(valid_birthdays) != len(birthdays):
             save_birthdays(valid_birthdays)
-            print("Verwaiste Einträge entfernt und bday.json aktualisiert.")
-            
+            print("bday.json aktualisiert (Namen/Einträge).")
+
+        # --- Geburtstagskinder heute ---
         birthdays_today = []
-        for entry in load_birthdays():
+        for entry in valid_birthdays:  # Hier: aktuelle Liste nehmen!
             if entry["date"] == today[:6]:
                 birthdays_today.append(entry)
 
@@ -274,11 +290,10 @@ async def birthday_check():
         else:
             print("Heute keine Geburtstage in bday.json.")
 
-    # Log speichern
-    log["last_run"] = today
-    log["congratulated_users"] = congratulated
-    save_birthday_log(log)
-
+        # Log speichern
+        log["last_run"] = today
+        log["congratulated_users"] = congratulated
+        save_birthday_log(log)
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
     discord.PartialEmoji(name="Kumo", id=1386427146037100644): "Kumo",
