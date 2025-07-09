@@ -36,7 +36,7 @@ async def on_command_error(ctx, error):
 # Geburtstagskonstanten
 BIRTHDAY_FILE = "bday.json"
 CONGRATS_CHANNEL_ID = 539525555276611594
-REMINDER_CHANNEL_ID = 830244075264540712
+REMINDER_CHANNEL_ID = 886994702639984670
 MENTION_IDS = [475017022707597322, 408712490789371913]
 
 # Neue Geburtstagsnachrichten
@@ -49,7 +49,13 @@ BIRTHDAY_MESSAGES = [
     "{mention}, alles Liebe zum Geburtstag! Genieße deinen besonderen Tag! 🍰",
     "Herzlichen Glückwunsch, {mention}! Genieß deinen Tag in vollen Zügen. 🎈",
     "Viel Freude und Glück, {mention}! Alles Gute zum Geburtstag!",
-	"Alles Liebe und eine tollen Tag für dich, {mention}!"
+	"Alles Liebe und eine tollen Tag für dich, {mention}!",
+	"Happy Birthday, {mention}! Heute wird gefeiert! 🥳",
+	"Herzlichen Glückwunsch, {mention}! Mach dir einen tollen Tag! 🎂",
+    "Yay! Alles Gute zum Geburtstag, {mention}! 🎊",
+    "{mention}, alles Gute! Lass es krachen! 🎉",
+    "{mention}, hoch die Tassen! Happy Birthday! 🎉",
+    "Alles Gute zum Geburtstag, {mention}! Heute bist du der Star! ⭐"
 ]
 
 def get_random_birthday_message(user):
@@ -210,6 +216,7 @@ def load_bdayforum():
     return entries
                            
 BIRTHDAY_LOG_FILE = "birthday_log.json"
+BDAYFORUM_LOG_FILE = "bdayforum_log.json"
 
 def load_birthday_log():
     try:
@@ -222,10 +229,27 @@ def save_birthday_log(log):
     with open(BIRTHDAY_LOG_FILE, "w", encoding="utf-8") as f:
         json.dump(log, f, indent=4)
         
-@tasks.loop(hours=24)
+def load_bdayforum_log():
+    try:
+        with open(BDAYFORUM_LOG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except (FileNotFoundError, json.JSONDecodeError):
+        return {"last_run": ""}
+
+def save_bdayforum_log(log):
+    with open(BDAYFORUM_LOG_FILE, "w", encoding="utf-8") as f:
+        json.dump(log, f, indent=4)
+        
+def save_bdayforum_log(log):
+    with open(BDAYFORUM_LOG_FILE, "w", encoding="utf-8") as f:
+        json.dump(log, f, indent=4)
+       
+        
+@tasks.loop(hours=1)
 async def birthday_check():
     berlin = ZoneInfo("Europe/Berlin")
-    today = datetime.now(berlin).strftime("%d.%m.%Y")  # besser: ganzes Datum
+    today = datetime.now(berlin).strftime("%d.%m.")       # ohne Jahr für Vergleich mit Geburtstagsdaten
+    today_with_year = datetime.now(berlin).strftime("%d-%m-%Y")  
     congrats_channel = bot.get_channel(CONGRATS_CHANNEL_ID)
     reminder_channel = bot.get_channel(REMINDER_CHANNEL_ID)
 
@@ -235,9 +259,9 @@ async def birthday_check():
 
     # --- Verwaiste Geburtstage entfernen + Namen aktualisieren ---
     guild = bot.get_guild(539503573848031234)
+    valid_birthdays = []
     if guild:
         birthdays = load_birthdays()
-        valid_birthdays = []
         names_updated = False
 
         for entry in birthdays:
@@ -259,41 +283,54 @@ async def birthday_check():
         if names_updated or len(valid_birthdays) != len(birthdays):
             save_birthdays(valid_birthdays)
             print("bday.json aktualisiert (Namen/Einträge).")
+    else:
+        valid_birthdays = load_birthdays()
 
-        # --- Geburtstagskinder heute ---
+    # --- Forum Reminder nur einmal am Tag senden ---
+    forum_log = load_bdayforum_log()
+    if forum_log.get("last_run") != today_with_year:
+        bdayforum_entries = load_bdayforum()
         birthdays_today = []
-        for entry in valid_birthdays:  # Hier: aktuelle Liste nehmen!
-            if entry["date"] == today[:6]:
-                birthdays_today.append(entry)
 
-        log = load_birthday_log()
-        congratulated = log.get("congratulated_users", {})
-        last_run = log.get("last_run", "")
+        for (datum, name) in bdayforum_entries:
+            if datum.strip() == today:
+                birthdays_today.append(name)
 
         if birthdays_today:
-            for entry in birthdays_today:
-                user_id = str(entry["id"])
-                name = entry["name"]
-                if user_id in congratulated and congratulated[user_id] == today:
-                    print(f"{name} wurde heute schon gratuliert.")
-                    continue
-
-                await congrats_channel.send(f"🎉 Alles Gute zum Geburtstag, <@{user_id}>! 🎂")
-                congratulated[user_id] = today
-
-            if last_run != today:
-                await reminder_channel.send(
-                    "✅ Geburtstags-Reminder erledigt!"
-                )
-            else:
-                print("Reminder wurde heute schon geschickt – Ping entfällt.")
+            mentions = ' '.join(f'<@{id}>' for id in MENTION_IDS)
+            msg = (
+                f"🎉 {mentions}, heute haben folgende Personen Geburtstag (Forum-Liste):\n"
+                + "\n".join(birthdays_today)
+            )
+            await reminder_channel.send(msg)
         else:
-            print("Heute keine Geburtstage in bday.json.")
+            print("Heute keine Geburtstage in bdayforum.txt.")
 
-        # Log speichern
-        log["last_run"] = today
-        log["congratulated_users"] = congratulated
-        save_birthday_log(log)
+        forum_log["last_run"] = today_with_year
+        save_bdayforum_log(forum_log)
+    else:
+        print("Forum-Reminder heute schon gesendet.")
+
+    # --- Geburtstagskinder heute (bday.json) gratulieren ---
+    birthday_log = load_birthday_log()
+
+    # Reset, wenn neuer Tag (mit Jahr!)
+    if birthday_log["last_run"] != today_with_year:
+        birthday_log["last_run"] = today_with_year
+        birthday_log["congratulated_users"] = {}
+
+    for entry in valid_birthdays:
+        user_id = str(entry["id"])
+        if entry["date"] == today and user_id not in birthday_log["congratulated_users"]:
+            member = guild.get_member(entry["id"]) if guild else None
+            if member:
+                await congrats_channel.send(get_random_birthday_message(member))
+                birthday_log["congratulated_users"][user_id] = today_with_year
+
+    save_birthday_log(birthday_log)
+
+    print(f"birthday_log.json und bdayforum_log.json aktualisiert (last_run: {today_with_year})")
+
 role_emojis = {
     discord.PartialEmoji(name="Konoha", id=1386427115804823582): "Konoha",
     discord.PartialEmoji(name="Kumo", id=1386427146037100644): "Kumo",
@@ -495,7 +532,8 @@ async def on_message(message):
         ("!genjutsu"): "https://www.naruto-snk.com/t312-genjutsu",
         ("!lwaffen"): "https://www.naruto-snk.com/t16234-legendare-waffen",
         ("!eninjutsu"): "https://www.naruto-snk.com/t306-elementlose-ninjutsu",
-        ("!shurikenjutsu"): "https://www.naruto-snk.com/t20557-shurikenjutsu"
+        ("!shurikenjutsu"): "https://www.naruto-snk.com/t20557-shurikenjutsu",
+             ("!ningurechner",): "https://www.naruto-snk.com/h10-ningu-rechner",
         }
 
         for commands_tuple, url in link_commands.items():
@@ -565,7 +603,7 @@ async def on_message(message):
 
     await bot.process_commands(message)
 
-@bot.command()
+@bot.command(aliases=['hilfe'])
 async def help(ctx):
     help_text = (
         "**SnK Bot Kommandos – Übersicht**\n"
@@ -592,6 +630,7 @@ async def help(ctx):
         "`!grundjutsu` - Akademiejutsu & Grundwissen\n"
          "`!haar` - Haar-Techniken\n"
          "`!katon` - Katon-Techniken\n"
+        "`!kinjutsu` - Limitierte Künste\n"
      	 "`!raiton` - Raiton-Techniken\n"
          "`!shurikenjutsu` - Shurikenjutsu\n"
          "`!suiton` - Suiton-Techniken\n"
@@ -607,6 +646,7 @@ async def help(ctx):
         "`!gesuche` – Gesuche & Stops\n"
         "`!jutsuslot` / `!jutsuslots` – Jutsuslotrechner\n"
         "`!missionsverwaltung` / `!missionsv` – Missionsverwaltung\n"
+          "`!ningurechner` – Ningu Rechner\n"
         "`!ninshu` / `!jutsuregeln` – Ninshu- und Jutsuregeln\n"
         "`!religion` / `!religionen` – Religions-Guide\n"
         "`!reisezeit` / `!reisezeiten` – Reisezeiten-Guide\n"
